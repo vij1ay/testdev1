@@ -61,7 +61,7 @@ Filter specialists and return 1 best match"""
 
 
 @tool
-def get_specialist_availability(search_query: str) -> dict:
+def get_specialist_availability(thread_id: str, search_query: str) -> dict:
     """Use LLM to intelligently match specialists based on search query and return 1 specialist based on domain and expertise"""
     try:
         specialist_data = llm_specialist_search(search_query, specialists_data)

@@ -6,6 +6,8 @@ from typing import List
 import pandas as pd
 from langchain_core.tools import tool
 from langchain.schema import HumanMessage, SystemMessage, AIMessage
+from langchain_core.runnables import ensure_config
+from app_logger import logger
 
 from llm_utils import get_custom_llm
 from utils import get_cwd
@@ -14,6 +16,7 @@ gllm = get_custom_llm()
 
 with open(get_cwd() + os.sep + 'data' + os.sep + 'specialists.json', 'r') as f:
     specialists_data = json.load(f)
+
 
 def llm_specialist_search(search_query: str, specialists: List[dict]) -> List[dict]:
     """Use LLM to intelligently match specialists based on search query and return 1 specialist json"""
@@ -44,7 +47,7 @@ Filter specialists and return 1 best match"""
             SystemMessage(content=system_prompt),
             HumanMessage(content=human_prompt)
         ])
-        # print("\nSpecialist LLM response:", response)    
+        # print("\nSpecialist LLM response:", response)
         json_resp = response.content.strip()
         if json_resp.startswith("```") and json_resp.endswith("```"):
             json_resp = json_resp[3:-3].strip()
@@ -61,18 +64,33 @@ Filter specialists and return 1 best match"""
 
 
 @tool
-def get_specialist_availability(search_query: str) -> dict:
+def get_specialist_availability(thread_id: str, search_query: str) -> dict:
     """Use LLM to intelligently match specialists based on search query and return 1 specialist based on domain and expertise"""
+    config = ensure_config()
+    thread_id = config.get("configurable", {}).get("thread_id", "unknown")
+    logger.info(
+        f"Tool Call: get_specialist_availability - thread: {thread_id}, search_query: {search_query}")
     try:
         specialist_data = llm_specialist_search(search_query, specialists_data)
         # specialist_data = random.choice(specialists_data)
         if "matched_specialist" in specialist_data:
             specialist_data = specialist_data["matched_specialist"]
-        print ("\n\nSpecialist 1st matched data >>>> ", specialist_data)
+        print("\n\nSpecialist 1st matched data >>>> ", specialist_data)
         if not specialist_data:
             specialist_data = specialists_data[0]
         # print ("\n\nSpecialist matched data >>>> ", specialist_data)
-        return {"message": f"Specialist selected: {str(specialist_data)}", "specialist_id": specialist_data.get("specialist_id", ""), "name": specialist_data.get("name", "")}
+        return {
+            "success": True,
+            "message": f"Specialist selected: {specialist_data.get('name', '')}, Title: {specialist_data.get('title', '')}",
+            "specialist_id": specialist_data.get("specialist_id", ""),
+            "specialist_name": specialist_data.get("name", ""),
+            "specialist_details": json.dumps(specialist_data),
+            "IMPORTANT_NEXT_STEP": f"MUST call store_conversation_data to save specialist_id '{specialist_data.get('specialist_id', '')}' and name '{specialist_data.get('name', '')}'"
+        }
     except Exception as e:
         print(f"Error fetching specialist availability: {e}")
-        return {"error": f"Error fetching specialist availability: {str(e)}"}
+        return {
+            "success": False,
+            "message": "No specialists available at the moment. Please try again later.",
+            "error": str(e)
+        }

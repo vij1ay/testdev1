@@ -87,7 +87,3 @@ class AppLogger:
 
 # Global logger instance
 logger = AppLogger()._logger
-
-def log_message(level: LogLevel, message: str, **kwargs):
-    """Helper function to log messages using the global logger instance"""
-    logger.log(level, message, **kwargs)
