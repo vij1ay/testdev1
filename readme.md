@@ -1,77 +1,47 @@
 # MultiAgent Boilerplate
 
-## Overview
+## Summary
 
-**MultiAgent Boilerplate** is a production-grade implementation of AI agents with tool integrations, designed for customer journey automation in cloud services and managed IT. The system leverages FastAPI, LangChain, and ChromaDB to deliver a robust, extensible platform for conversational AI, workflow orchestration, and business process automation.
+**MultiAgent Boilerplate** is a production-grade, extensible platform for building AI-powered customer journey agents. It orchestrates conversational flows, tool integrations, and business logic for **Customer Journey** use cases. The system leverages FastAPI, LangChain, ReactAgent, ChromaDB, and Redis for scalable, real-time, and context-aware automation.
 
 ---
 
-## Key Features
+## Features
 
-- **AI Agent Orchestration:** Modular, extensible agent architecture for handling customer journeys, onboarding, appointment scheduling, and expert matching.
+- **AI Agent Orchestration:** Modular agents automate onboarding, expert matching, appointment scheduling, and customer engagement.
 - **Tool Integration:** Agents interact with tools for onboarding, specialist search, appointment booking, case studies, testimonials, and conversation summarization.
-- **State Management:** Strict protocols for ID management, consent capture, and conversation state tracking.
-- **Summarization Protocol:** Automatic summarization of conversations at critical milestones (e.g., after appointment booking or when key business topics are discussed).
-- **WebSocket Support:** Real-time communication with clients using FastAPI WebSocket endpoints.
-- **Production-Grade Logging:** Centralized logging for traceability and debugging.
-- **Vector Database:** ChromaDB integration for semantic search over case studies and testimonials.
 - **Extensible Prompts:** System prompts enforce business rules, consent protocols, and summarization logic.
+- **Strict Protocol Enforcement:** Implements mandatory consent, ID management, and summarization protocols for compliance and reliability.
+- **Semantic Search:** ChromaDB powers semantic retrieval of case studies and testimonials.
+- **State Management:** Redis-backed state and checkpointing for robust session handling.
+- **WebSocket Real-Time Communication:** FastAPI WebSocket endpoints for live chat and event streaming.
+- **Production-Grade Logging:** Centralized, structured logging for traceability.
 
 ---
 
-## Customer Journey Flow
+## Project Structure
 
-1. **First Impression & Trust**
-   - AI agent introduces itself and the company.
-   - Adapts tone to customer role (CTO, Developer, Business, etc.).
-   - Discovers customer goals, pain points, and requirements.
-
-2. **Conversion & Engagement**
-   - Provides case studies and testimonials as proof.
-   - Enforces explicit consent before onboarding.
-   - Onboards customer and stores IDs for future tool calls.
-   - Matches customer with specialists and schedules appointments.
-
-3. **Solution Alignment**
-   - Maps challenges to solutions (migration, modernization, cost optimization, cloud ops).
-   - Presents tailored solutions and company strengths.
-
-4. **Retention & Up-sell**
-   - Offers managed services, SLAs, and follow-up engagements.
-
----
-
-## Critical Protocols
-
-- **ID Management:** Always use exact IDs returned by tools. Never invent IDs.
-- **Consent Protocol:** Onboarding only after explicit, affirmative consent.
-- **Summarization Protocol:** Summarize conversation only after appointment booking or when key business topics are mentioned (see full keyword list in `prompts/planner_prompts.py`).
-- **Tool Usage:** Agents only call tools when protocols are satisfied. Never hallucinate data or responses.
+```
+.
+├── agent_tools/           # AI agent tools (customers, specialists, appointments, etc.)
+├── conversations/         # Conversation state and thread management
+├── websocket/             # WebSocket manager and handlers
+├── prompts/               # System and planner prompts
+├── data/                  # CSVs and persistent data (appointments, specialists, etc.)
+├── chromastore/           # ChromaDB vector stores for semantic search
+├── assets/                # Static files for chat UI
+├── fastapi_app.py         # FastAPI application entrypoint
+├── llm_utils.py           # LLM and embedding utilities
+├── utils.py               # Utility functions and environment management
+├── config.py              # Company and chatbot configuration
+├── populate_casestudies.py # Script to populate ChromaDB with case studies
+├── populate_testimonials.py # Script to populate ChromaDB with testimonials
+└── README.md              # Project documentation
+```
 
 ---
 
-## Tooling
-
-- **Case Studies Tool:** Semantic search and retrieval of company case studies.
-- **Testimonials Tool:** Semantic search and retrieval of customer testimonials.
-- **Onboard Customer Tool:** Creates customer profiles after explicit consent.
-- **Summarize Conversation Tool:** Extracts structured summaries for CRM and analytics.
-- **Specialist Availability Tool:** Matches customer needs to available specialists.
-- **Appointment Tools:** Checks availability and books appointments.
-
----
-
-## Technology Stack
-
-- **FastAPI**: High-performance API and WebSocket server.
-- **LangChain**: Agent orchestration and tool integration.
-- **ChromaDB**: Vector database for semantic search.
-- **Redis**: State management and checkpointing.
-- **Python**: Core language for all backend logic.
-
----
-
-## Getting Started
+## Setup
 
 1. **Install dependencies:**
    ```bash
@@ -79,49 +49,78 @@
    ```
 
 2. **Configure environment:**
-   - Set up `.env` with required keys (OpenAI, Google, Redis, etc.).
-   - Place your case studies and testimonials in the respective folders.
+   - Create a `.env` file with required keys (OpenAI, Google, Redis, etc.).
+   - Place your case studies and testimonials in the `casestudies/` and `testimonials/` folders.
 
 3. **Populate vector databases:**
+    - Add Case Studies and Testimonials to ChromaDB by placing JSON/txt files in the `casestudies/` and `testimonials/` directories respectively and populate by running:
    ```bash
    python populate_casestudies.py
    python populate_testimonials.py
    ```
 
-4. **Run the server:**
+---
+
+## Running the Application
+
+1. **Start the FastAPI server:**
    ```bash
    python fastapi_app.py
    ```
 
-5. **Access the chat interface:**
+2. **Access the chat interface:**
    - Open your browser to `http://localhost:8000`
 
 ---
 
-## Enforcement & Best Practices
+## Architecture
 
-- **Never skip consent or ID protocols.**
-- **Never hallucinate case studies, testimonials, or IDs.**
-- **Always respond in the customer's language.**
-- **Keep answers short, clear, and role-appropriate.**
-- **Silent summarization:** Never mention summarization to the customer.
+```mermaid
+graph TD
+    A[Client (Browser)] -- WebSocket/HTTP --> B[FastAPI Server]
+    B -- REST API --> C[LangChain Agent Orchestrator]
+    B -- WebSocket --> G[WebSocketManager]
+    C -- Tool Calls --> D[Agent Tools]
+    C -- Prompts --> E[Planner Prompts]
+    D -- Data Access --> F[ChromaDB]
+    D -- State Management --> H[Redis]
+    F -- Semantic Search --> D
+    H -- Session/Checkpoint --> D
+    G -- Real-Time Events --> A
+    subgraph Data Stores
+        F
+        H
+    end
+    subgraph Business Logic
+        D
+        E
+    end
+```
+
+- **FastAPI**: Serves REST and WebSocket endpoints for chat and event streaming.
+- **LangChain**: Orchestrates agent logic, tool calls, and prompt management.
+- **ChromaDB**: Provides semantic search for case studies and testimonials.
+- **Redis**: Manages state, session history, and checkpointing.
+- **WebSocketManager**: Handles real-time client connections and message broadcasting.
+- **Planner Prompts**: Enforce business rules, consent, ID management, and summarization protocols.
 
 ---
 
-## Extending the System
+## Future Customization
 
-- Add new tools by implementing them in the `agent_tools` directory.
-- Update prompts and protocols in `prompts/planner_prompts.py`.
-- Integrate new data sources by updating vector database scripts.
+- **Add new tools:** Implement in `agent_tools/` and register with the planner `agent_tools/planner.py`.
+- **Update prompts and business logic:** Edit `prompts/planner_prompts.py`.
+- **Integrate new data sources:** Update population scripts and vector database logic.
+- **Extend agent capabilities:** Add new flows, protocols, or integrations as needed by adding new tools.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please open issues or submit pull requests for bug fixes, enhancements, or new features. For major changes, discuss proposals in advance.
 
 ---
 
 ## License
 
-This project is intended for production use and can be adapted for commercial deployments. Please review and comply with all third-party licenses for dependencies.
-
----
-
-## Contact
-
-For support, customization, or enterprise deployments, contact the maintainers or open an issue
+This project is intended for production use and can be adapted for commercial deployments. Please review and comply with all third-party licenses
