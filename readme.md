@@ -50,7 +50,7 @@
 
 2. **Configure environment:**
    - Create a `.env` file with required keys (OpenAI, Google, Redis, etc.).
-   - Place your case studies and testimonials in the `casestudies/` and `testimonials/` folders.
+   - Modify config in `config.py` for company-specific settings (CompanyName, ChatbotName, etc.).
 
 3. **Populate vector databases:**
     - Add Case Studies and Testimonials to ChromaDB by placing JSON/txt files in the `casestudies/` and `testimonials/` directories respectively and populate by running:
@@ -76,29 +76,42 @@
 ## Architecture
 
 ```mermaid
-graph TD
-    A[Client (Browser)] -- WebSocket/HTTP --> B[FastAPI Server]
-    B -- REST API --> C[LangChain Agent Orchestrator]
-    B -- WebSocket --> G[WebSocketManager]
-    C -- Tool Calls --> D[Agent Tools]
-    C -- Prompts --> E[Planner Prompts]
-    D -- Data Access --> F[ChromaDB]
-    D -- State Management --> H[Redis]
-    F -- Semantic Search --> D
-    H -- Session/Checkpoint --> D
-    G -- Real-Time Events --> A
-    subgraph Data Stores
-        F
-        H
-    end
-    subgraph Business Logic
-        D
-        E
-    end
+flowchart TB
+    U["User"] -- Interacts with --> UI["Web Chat Interface<br>assets/chat.html"]
+    UI -- HTTP Requests --> API["FastAPI Server , Websocket<br>fastapi_app.py, chat_handler.py"]
+    API -- Processes queries using --> AGENT["LangGraph React Agent<br>planner.py"]
+    AGENT -- Uses --> TOOLS["Agent Tools<br>(VectorDB, APIs, Actions)"]
+    TOOLS -- Retrieves from --> VS["Chroma Vector Store"]
+    DP["Document Processor<br>populate_casestudies/testimonials.py"] -- Populates --> VS
+    DOCS["Case Studies, Testimonials"] -- Processed by --> DP
+    AGENT -- Generates responses with --> LLM["Language Model<br>"]
+    LLM -- Generated Result to User --> U
+    VS -- Matched Document --> LLM
+    
+    %% Styling
+    U:::user
+    UI:::ui
+    API:::api
+    AGENT:::agent
+    TOOLS:::tools
+    VS:::vector
+    DP:::docs
+    DOCS:::docs
+    LLM:::llm
+
+    %% Class Definitions
+    classDef user fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef ui fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef api fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef agent fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef tools fill:#ede7f6,stroke:#4527a0,stroke-width:2px
+    classDef vector fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+    classDef docs fill:#f1f8e9,stroke:#33691e,stroke-width:2px
+    classDef llm fill:#e0f2f1,stroke:#00695c,stroke-width:2px
 ```
 
 - **FastAPI**: Serves REST and WebSocket endpoints for chat and event streaming.
-- **LangChain**: Orchestrates agent logic, tool calls, and prompt management.
+- **LangGraph ReactAgent**: Orchestrates agent logic, tool calls, and prompt management.
 - **ChromaDB**: Provides semantic search for case studies and testimonials.
 - **Redis**: Manages state, session history, and checkpointing.
 - **WebSocketManager**: Handles real-time client connections and message broadcasting.
@@ -122,5 +135,6 @@ Contributions are welcome! Please open issues or submit pull requests for bug fi
 ---
 
 ## License
+
 
 This project is intended for production use and can be adapted for commercial deployments. Please review and comply with all third-party licenses
