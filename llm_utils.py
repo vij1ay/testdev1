@@ -13,6 +13,7 @@ Example:
 import ast
 import os
 import json
+
 from langchain_chroma import Chroma
 from langchain_ollama import OllamaEmbeddings
 from langchain.chat_models import init_chat_model
@@ -21,6 +22,7 @@ from langchain_core.embeddings import Embeddings
 from langchain.schema import HumanMessage, SystemMessage, AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
+
 from utils import environment
 
 if environment.get("LANGSMITH_TRACING", False) in [True, "true", "True"]:
@@ -32,36 +34,14 @@ if environment.get("LANGSMITH_TRACING", False) in [True, "true", "True"]:
 
 
 def get_llm() -> BaseChatModel:
-    """Initialize and return a language model for chat interactions.
+    """
+    Initialize and return a language model for chat interactions.
 
     This function sets up a language model based on available credentials and
     configuration. It supports multiple providers:
-
     - OpenAI GPT models
     - Google Gemini models
     - Local Ollama models
-
-    The choice of model can be configured through environment variables or
-    by modifying the implementation directly.
-
-    Configuration Options:
-        - OpenAI:
-          ```
-          # Required: pip install langchain-openai
-          from langchain_openai import ChatOpenAI
-          llm = ChatOpenAI(model="gpt-4", temperature=0.0)
-          # or
-          llm = init_chat_model("gpt-4", model_provider="openai", temperature=0.0)
-          ```
-
-        - Google GenAI:
-          ```
-          # Required: pip install langchain-google-genai
-          from langchain_google_genai import ChatGoogleGenerativeAI
-          llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.0)
-          # or
-          llm = init_chat_model("gemini-pro", model_provider="google_genai", temperature=0.0)
-          ```
 
     Returns:
         BaseChatModel: Initialized language model instance
@@ -88,7 +68,6 @@ def get_llm() -> BaseChatModel:
             print("\n** Initialized OpenAI LLM **\n")
             return llm
     elif "GOOGLE_API_KEY" in environment and environment["GOOGLE_API_KEY"]:
-        # Get API key from environment
         google_api_key = environment["GOOGLE_API_KEY"]
         if not google_api_key:
             raise ValueError(
@@ -103,7 +82,7 @@ def get_llm() -> BaseChatModel:
         )
         print("\n** Initialized Google GenAI LLM **\n")
         return llm
-    else:  # return local model
+    else:
         llm = init_chat_model(
             "llama3.2",
             model_provider="ollama",
@@ -114,18 +93,18 @@ def get_llm() -> BaseChatModel:
 
 
 class CustomChatOpenAI(ChatOpenAI):
-    """Custom ChatOpenAI class to override the invoke method for tracing."""
-
+    """
+    Custom ChatOpenAI class to override the invoke method for tracing.
+    """
     def invoke(self, messages, **kwargs):
-        """Override invoke to add custom tracing logic."""
-        # Custom tracing logic can be added here
-        # print("Invoking CustomChatOpenAI with messages:", messages)
         return super().invoke(messages, **kwargs)
 
 
 def get_custom_llm() -> BaseChatModel:
+    """
+    Returns a custom language model instance for chat interactions.
+    """
     if "OPENAI_API_KEY" in environment and environment["OPENAI_API_KEY"]:
-
         open_ai_key = environment["OPENAI_API_KEY"]
         if open_ai_key:
             os.environ["OPENAI_API_KEY"] = open_ai_key
@@ -136,17 +115,10 @@ def get_custom_llm() -> BaseChatModel:
                 timeout=None,
                 base_url=environment["OPEN_API_URL"],
                 api_key=open_ai_key
-
-                # max_retries=2,
-                # api_key="...",  # if you prefer to pass api key in directly instaed of using env vars
-                # base_url="...",
-                # organization="...",
-                # other params...
             )
             print("\n** Initialized OpenAI LLM **\n")
             return llm
     else:
-
         google_api_key = environment["GOOGLE_API_KEY"]
         if not google_api_key:
             raise ValueError(
@@ -165,49 +137,9 @@ def get_custom_llm() -> BaseChatModel:
 llmInst = get_custom_llm()
 
 
-def summarize_conversation(messages: list) -> str:
-    """Summarizes a conversation using a language model.
-
-    Args:
-        messages (list): A list of messages in the conversation.
-
-    Returns:
-        str: A summary of the conversation.
-    """
-
-    # Construct a prompt for summarization
-    prompt = f"Please summarize the following conversation and provide a json format of summary, customer_info (strictly json with case sensitive keys - ['name', 'company', 'domain', 'email', 'topic']), specialist_info (strictly json with case sensitive keys - ['name', 'designation', 'expertise']), customer_sentiment, minutes_of_meeting (Elaborate as much as possible. Try to keep in chronological order), customer_company_name_with_appointment_datetime_with_specialist_name Eg {{\"summary\": \"\", \"customer_info\": \"\", \"specialist_info\": \"\", \"customer_sentiment\": \"\", \"minutes_of_meeting\": \"\", \"customer_company_name_with_appointment_datetime_with_specialist_name\": \"\"}}:\nMessages:\n"
-    for message in messages:
-        prompt += f"Role: {message['role']}, Content: {message['content']}\n"
-    # prompt += "\nSummary:"
-
-    # Generate the summary using the language model
-    response = llmInst.invoke([SystemMessage(content=prompt)])
-    json_resp = response.content.strip()
-    if json_resp.startswith("```") and json_resp.endswith("```"):
-        json_resp = json_resp[3:-3].strip()
-    if json_resp.startswith("json"):
-        json_resp = json_resp[4:].strip()
-
-    # Parse LLM response
-    try:
-        return ast.literal_eval(json_resp)
-    except (ValueError, SyntaxError) as e:
-        print("Error parsing LLM response:", e)
-        return {
-            "summary": "",
-            "customer_info": "",
-            "customer_company_name_with_appointment_datetime_with_specialist_name": "",
-            "specialist_info": "",
-            "customer_sentiment": "",
-            "minutes_of_meeting": "",
-            "error": "Failed to parse summary from LLM response"
-        }
-    return response.content.strip()
-
-
 def generate_title_from_summary(messages: list) -> str:
-    """Generates a concise title from a conversation messages.
+    """
+    Generates a concise title from a conversation messages.
 
     Args:
         messages (list): A list of messages in the conversation.
@@ -220,48 +152,23 @@ def generate_title_from_summary(messages: list) -> str:
         message_str += f"Role: {message['role']}, Content: {message['content']}\n"
     prompt = f"Generate a concise title (max 6 words) for the following conversation:\n{message_str}\nTitle:"
     response = llmInst.invoke([SystemMessage(content=prompt)])
-    title = response.content.strip().split('\n')[0]  # Take the first line
-    # if len(title) > 60:  # Limit title length
-    #     title = title[:57] + "..."
+    title = response.content.strip().split('\n')[0]
     return title.strip()
 
 
 def get_embedding_function() -> Embeddings:
-    """Initialize and return an embedding model for text vectorization.
-
-    This function sets up an embedding model for converting text into vector
-    representations. It supports multiple providers:
-
-    - Ollama (local) embeddings
-    - OpenAI embeddings
-    - Other LangChain-compatible embedding models
-
-    Configuration Options:
-        - OpenAI:
-          ```
-          # Required: pip install langchain-openai
-          from langchain_openai import OpenAIEmbeddings
-          embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
-          ```
-
-        - Ollama (default):
-          ```
-          from langchain_ollama import OllamaEmbeddings
-          embeddings = OllamaEmbeddings(model="nomic-embed-text")
-          ```
+    """
+    Initialize and return an embedding model for text vectorization.
 
     Returns:
         Embeddings: Initialized embedding model instance
-
-    Note:
-        The default implementation uses Ollama's nomic-embed-text model,
-        which runs locally and doesn't require API keys.
     """
     return OllamaEmbeddings(model="nomic-embed-text")
 
 
 def get_chroma_db(db_path: str) -> Chroma:
-    """Initialize and return a Chroma vector database instance.
+    """
+    Initialize and return a Chroma vector database instance.
 
     Args:
         db_path (str): The path to the directory where the Chroma database is stored.
@@ -273,7 +180,7 @@ def get_chroma_db(db_path: str) -> Chroma:
         db_full_path = db_path
         if not db_full_path.startswith("chromastore" + os.sep):
             db_full_path = os.path.join("chromastore", db_path)
-        os.makedirs(db_full_path, exist_ok=True)  # Ensure directory exists
+        os.makedirs(db_full_path, exist_ok=True)
         db = Chroma(
             persist_directory=db_full_path,
             embedding_function=get_embedding_function()
@@ -285,7 +192,8 @@ def get_chroma_db(db_path: str) -> Chroma:
 
 
 def chroma_rag_retrieve(chromadb, query: str, top_k: int = 2):
-    """Retrieve information related to a query from vector database.
+    """
+    Retrieve information related to a query from vector database.
 
     Args:
         chromadb (Chroma): The Chroma vector database instance
@@ -294,8 +202,6 @@ def chroma_rag_retrieve(chromadb, query: str, top_k: int = 2):
 
     Returns:
         tuple: (serialized_content, retrieved_documents)
-        - serialized_content (str): Formatted string of retrieved content
-        - retrieved_documents (list): Raw document objects with scores
     """
     try:
         return chromadb.similarity_search_with_score(query, k=top_k)
@@ -312,4 +218,4 @@ class MessageEncoder(json.JSONEncoder):
                 "content": obj.content,
                 "additional_kwargs": obj.additional_kwargs,
             }
-        return super().default(obj)
+        return

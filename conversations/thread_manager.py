@@ -9,6 +9,10 @@ redis_client = get_redis_instance()
 
 
 class Conversation:
+    """
+    Represents a single conversation thread.
+    Handles message history and persistence to Redis.
+    """
     def __init__(self, thread_id: str, user_id: str):
         self.thread_id = thread_id
         self.user_id = user_id
@@ -18,7 +22,9 @@ class Conversation:
         self.get_data_from_redis()
 
     def get_data_from_redis(self) -> None:
-        # Fetch existing conversation data from Redis
+        """
+        Fetch existing conversation data from Redis and populate thread_name and messages.
+        """
         data = redis_client.hget(self.redis_hash_key, self.thread_id)
         if data:
             data = json.loads(data)
@@ -33,14 +39,22 @@ class Conversation:
             self.messages = list()
 
     def add_message(self, message: Dict[str, Any]) -> None:
+        """
+        Add a message to the conversation and update Redis.
+        """
         self.messages.append(message)
         self.update_hash()
 
     def get_history(self) -> List[Dict[str, Any]]:
+        """
+        Return the message history for this conversation.
+        """
         return self.messages
 
     def update_hash(self) -> None:
-        # Update the Redis hash with the current state of the conversation
+        """
+        Update the Redis hash with the current state of the conversation.
+        """
         data = safe_jsondumps({
             "thread_id": self.thread_id,
             "user_id": self.user_id,
@@ -51,11 +65,10 @@ class Conversation:
 
 
 class ConversationManager:
-    # ToDo: integrate with redis or any db for persistence
-
     """
-    ConversationManager manages the state and history of multiple conversation threads  .
-    Implements a singleton pattern to ensure consistent management across the app."""
+    ConversationManager manages the state and history of multiple conversation threads.
+    Implements a singleton pattern to ensure consistent management across the app.
+    """
     _instance = None
     _lock = Lock()  # Thread safety
 
@@ -69,7 +82,16 @@ class ConversationManager:
         self.conversation_history = dict()
 
     def get_session(self, thread_id: str, user_id: str = "default") -> Dict[str, Any]:
-        """Get or create a session for a given thread ID."""
+        """
+        Get or create a session for a given thread ID.
+
+        Args:
+            thread_id (str): The thread identifier.
+            user_id (str): The user identifier.
+
+        Returns:
+            Dict[str, Any]: Session data including thread_id, thread_name, and messages.
+        """
         if thread_id not in self.conversation_history:
             self.conversation_history[thread_id] = Conversation(
                 thread_id, user_id)
@@ -80,12 +102,24 @@ class ConversationManager:
         }
 
     def update_thread_name(self, thread_id: str, name: str) -> None:
-        """Update the name of a conversation thread."""
+        """
+        Update the name of a conversation thread.
+
+        Args:
+            thread_id (str): The thread identifier.
+            name (str): The new thread name.
+        """
         if thread_id in self.conversation_history:
             self.conversation_history[thread_id].thread_name = name
 
     def add_message(self, thread_id: str, data: Dict[str, Any]) -> None:
-        """Store conversation messages."""
+        """
+        Store conversation messages.
+
+        Args:
+            thread_id (str): The thread identifier.
+            data (Dict[str, Any]): The message data.
+        """
         if thread_id not in self.conversation_history:
             self.conversation_history[thread_id] = Conversation(
                 thread_id, "default_user")
@@ -93,5 +127,13 @@ class ConversationManager:
             data)  # Append message to the conversation
 
     def get_history(self, thread_id: str) -> List[Dict[str, Any]]:
-        """Return conversation history."""
+        """
+        Return conversation history.
+
+        Args:
+            thread_id (str): The thread identifier.
+
+        Returns:
+            List[Dict[str, Any]]: List of messages in the conversation.
+        """
         return self.conversation_history.get(thread_id, []).get_history()

@@ -1,30 +1,25 @@
-import time
-import json
 import asyncio
+import datetime
+import json
+import time
 import traceback
-
 from uuid import uuid4
-from datetime import datetime
 from typing import Dict, Any, Optional, List, Set, cast
-from fastapi import FastAPI
-from fastapi import WebSocketDisconnect
+
+from fastapi import FastAPI, WebSocketDisconnect
 from langchain_core.runnables import RunnableConfig
 
 from conversations.thread_manager import ConversationManager
 from websocket.manager import WebSocketManager
-# from agent_tools.planner import planner_graph
 from app_logger import logger
-from llm_utils import summarize_conversation
 from utils import (
     _ensure_serializable,
     get_redis_instance,
     safe_jsondumps,
 )
 
-
 ws_manager = WebSocketManager()
 conversation_mgr = ConversationManager()
-redis_client = get_redis_instance()
 
 
 async def _process_graph_stream(
@@ -50,9 +45,7 @@ async def _process_graph_stream(
     stream_kwargs = {"stream_mode": "events"}
 
     try:
-        logger.info(
-            f"Starting unified event stream for thread {thread_id} with config: {event_stream_config}"
-        )
+        logger.info(f"Starting unified event stream for thread {thread_id} with config: {event_stream_config}")
 
         async for event in fastapi_app.state.planner_graph.astream_events(
             user_input, config=event_stream_config, version="v2", **stream_kwargs
@@ -62,11 +55,42 @@ async def _process_graph_stream(
             event_name = event.get("name", "")
             run_id = event.get("run_id")
             tags = event.get("tags", [])
-            logger.info(
-                f"Event received: type={event_type}, name={event_name}, run_id={run_id}"
-            )
-            if event_name == "CustomChatOpenAI":  # as other llm nodes also emit on_chat_model_stream
-                continue
+            logger.debug(f"Event received: type={event_type}, name={event_name}, run_id={run_id}")
+            if event_name == "CustomChatOpenAI":
+                if event_type == "on_chain_end" or event_type == "on_node_end":
+                    output = event_data.get("output")
+                    if output:
+                        final_ai_message_content = None
+                        if isinstance(output, dict) and "messages" in output:
+                            final_messages = output["messages"]
+                            if final_messages and isinstance(final_messages, list):
+                                for msg in reversed(final_messages):
+                                    role = None
+                                    content = None
+                                    if isinstance(msg, dict):
+                                        role = msg.get("role")
+                                        content = msg.get("content")
+                                    elif hasattr(msg, "type") and hasattr(msg, "content"):
+                                        role = getattr(msg, "type", None) or getattr(
+                                            msg, "role", None
+                                        )
+                                        content = getattr(msg, "content", None)
+                                    if (role == "ai" or role == "assistant") and content:
+                                        final_ai_message_content = content
+                                        break
+                        if final_ai_message_content:
+                            current_time = datetime.datetime.now(
+                                datetime.timezone.utc)
+                            ai_message = {
+                                "id": message_id,
+                                "role": "internal_ai",
+                                "content": final_ai_message_content,
+                                "timestamp": current_time.isoformat(),
+                            }
+                            conversation_mgr.add_message(thread_id, ai_message)
+                    continue
+                else:
+                    continue  # Skip other events from CustomChatOpenAI
 
             # Token Streaming Logic
             if event_type in ["on_chat_model_stream", "on_llm_stream"]:
@@ -86,7 +110,7 @@ async def _process_graph_stream(
                                 thread_id,
                                 {
                                     "type": "msg_stream_start",
-                                    "timestamp": datetime.now().isoformat(),
+                                    "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                                 },
                             )
                             logger.info(
@@ -101,7 +125,7 @@ async def _process_graph_stream(
                             {
                                 "type": "msg_stream",
                                 "message": content_piece,
-                                "timestamp": datetime.now().isoformat(),
+                                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                             },
                         )
                         current_length = len(latest_full_content)
@@ -147,7 +171,7 @@ async def _process_graph_stream(
                             {
                                 "type": "structured_response",
                                 "data": structured_data,
-                                "timestamp": datetime.now().isoformat(),
+                                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                             },
                         )
                         structured_response_sent = True
@@ -235,7 +259,7 @@ async def _process_graph_stream(
                     "node_name": node_name,
                     "display_name": display_name,
                     "message": message,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                     "event_order": len(seen_events),
                 }
                 if tool_info:
@@ -250,7 +274,8 @@ async def _process_graph_stream(
         if is_streaming_tokens:
             await ws_manager.send_message(
                 thread_id,
-                {"type": "msg_stream_end", "timestamp": datetime.now().isoformat()},
+                {"type": "msg_stream_end", "timestamp": datetime.datetime.now(
+                    datetime.timezone.utc).isoformat()},
             )
             logger.info(f"Token stream ended for thread {thread_id}")
 
@@ -265,7 +290,7 @@ async def _process_graph_stream(
             if final_content_to_save:
                 current_thread_name = session.get(
                     "thread_name", "New Conversation")
-                current_time = datetime.now()
+                current_time = datetime.datetime.now(datetime.timezone.utc)
                 message_id = str(uuid4())
 
                 logger.info(
@@ -317,7 +342,7 @@ async def _process_graph_stream(
                                             "type": "thread_name_updated",
                                             "thread_id": thread_id,
                                             "name": generated_name,
-                                            "timestamp": datetime.now().isoformat(),
+                                            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                                         },
                                     )
                     except Exception as naming_err:
@@ -339,16 +364,12 @@ async def _process_graph_stream(
                         ai_message["cards"] = cards
                     conversation_mgr.add_message(thread_id, ai_message)
 
-                    logger.info(
-                        f"Added AI message to session. Session now has {len(session['messages'])} messages"
-                    )
+                    logger.info(f"Added AI message to session. Session now has {len(session['messages'])} messages")
                 elif not any(
                     msg.get("role") == "ai" for msg in session["messages"][1:]
                 ):
                     fallback_response = "I'm sorry, I wasn't able to generate a response. How else can I help you with your travel plans?"
-                    logger.warning(
-                        "No AI content generated, adding fallback response to session cache."
-                    )
+                    logger.warning(f"No AI content generated, adding fallback response to session cache.")
                     conversation_mgr.add_message(
                         thread_id, {"role": "ai", "content": fallback_response}
                     )
@@ -359,11 +380,11 @@ async def _process_graph_stream(
                         "type": "agent_response",
                         "content": final_content_to_save,
                         "agent": "planner",
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                     }
 
                     await ws_manager.send_message(thread_id, response_message)
-                    logger.info("Sent complete agent response message")
+                    logger.debug("Sent complete agent response message")
                 else:
                     logger.warning(
                         "No final AI content available to send as agent_response."
@@ -375,7 +396,7 @@ async def _process_graph_stream(
                 "type": "completed",
                 "thread_id": thread_id,
                 "agent": "planner",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             },
         )
 
@@ -386,7 +407,7 @@ async def _process_graph_stream(
                 await ws_manager.send_message(
                     thread_id,
                     {"type": "msg_stream_end",
-                        "timestamp": datetime.now().isoformat()},
+                        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()},
                 )
             except Exception:
                 pass
@@ -403,7 +424,7 @@ async def _process_graph_stream(
                 {
                     "type": "error",
                     "message": f"Processing error: {str(e)}",
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 },
             )
         except Exception as ws_err:
@@ -426,7 +447,7 @@ async def _process_graph_stream(
                         "type": "agent_response",
                         "content": fallback_response,
                         "agent": "planner",
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                     }
 
                     await ws_manager.send_message(thread_id, fallback_message)
@@ -444,7 +465,7 @@ async def _process_graph_stream(
                     "type": "completed",
                     "thread_id": thread_id,
                     "agent": "planner",
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 },
             )
             logger.debug("Sent completion message in finally block")
@@ -475,34 +496,6 @@ async def _format_event_message(
         if event_type == "on_node_start":
             return "Starting holiday plan..."
         return None
-
-    if node_name == "book_appointment" and event_type == "on_tool_end":
-        # Store in redis
-        try:
-            all_messages = conversation_mgr.get_history(thread_id)
-            # all_messages = _ensure_serializable(all_messages)
-            summary = summarize_conversation(all_messages)
-            if not summary or "error" in summary:
-                summary = "No summary available."
-            else:
-                summary["thread_id"] = thread_id
-                redis_client.hset(
-                    f"leads_generated",
-                    summary.get(
-                        "customer_company_name_with_appointment_datetime_with_specialist_name",
-                        thread_id,
-                    ),
-                    json.dumps(summary),
-                )
-            # redis_client.set(
-            #     f"conversation:thread:{thread_id}",
-            #     safe_jsondumps(
-            #         {"messages": _ensure_serializable(messages_for_graph)}),
-            # )
-        except Exception as e:
-            print(f"Error saving conversation to Redis for thread: {e}")
-            logger.error(
-                f"Redis Save Error Traceback: {traceback.format_exc()}")
 
     node_lower = node_name.lower()
 
@@ -554,9 +547,8 @@ async def handle(fastapi_app: FastAPI, thread_id: str, user_id: str, user_input:
             user_query = user_input.strip()
         else:
             user_query = ""
-        print("\n\nuser_query >>>> ", user_query)
         if user_query:
-            current_time = datetime.now()
+            current_time = datetime.datetime.now(datetime.timezone.utc)
             message_id = str(uuid4())
             user_message = {
                 "id": message_id,
@@ -567,12 +559,6 @@ async def handle(fastapi_app: FastAPI, thread_id: str, user_id: str, user_input:
             }
 
             conversation_mgr.add_message(thread_id, user_message)
-            # messages_for_graph = conversation_mgr.get_history(
-            #     thread_id
-            # )
-            # logger.info(
-            #     f"Stored user message in session for thread {thread_id}. Session now has {len(messages_for_graph)} messages."
-            # )
             user_input = {
                 "messages": [user_message],
                 "thread_id": thread_id,
@@ -589,7 +575,7 @@ async def handle(fastapi_app: FastAPI, thread_id: str, user_id: str, user_input:
                 {
                     "type": "processing",
                     "message": "VJ Bot thinking... 🤔",
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 },
             )
 
@@ -603,7 +589,7 @@ async def handle(fastapi_app: FastAPI, thread_id: str, user_id: str, user_input:
                     f"Waiting for Thread stream task for thread {thread_id}..."
                 )
                 await processing_task
-                logger.info(
+                logger.debug(
                     f"Thread stream task completed for thread {thread_id}.")
             except asyncio.CancelledError:
                 logger.info(f"Thread stream task cancelled for {thread_id}")

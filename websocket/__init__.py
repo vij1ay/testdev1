@@ -1,14 +1,13 @@
-# api/websocket.py
-import traceback
 import asyncio
-from datetime import datetime
+import datetime
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
-import importlib
+
 from app_logger import logger
 from websocket.manager import WebSocketManager
-# Ensure handlers are imported so they can be found
 from websocket.handlers import chat_handler
 
+# Handler map for dynamic handler selection
 handler_map = {
     "chat": chat_handler,
     # Add other handlers here as needed
@@ -19,7 +18,15 @@ ws_manager = WebSocketManager()
 
 
 def get_handler_module(module_name: str):
-    """Dynamically import a handler module from the websocket.handlers package."""
+    """
+    Dynamically import a handler module from the websocket.handlers package.
+
+    Args:
+        module_name (str): Name of the handler module.
+
+    Returns:
+        module: The handler module if found, else None.
+    """
     try:
         return handler_map.get(module_name)
     except Exception as e:
@@ -29,21 +36,35 @@ def get_handler_module(module_name: str):
 
 
 def validate_user(user_id: str):
-    # Placeholder for user validation logic
-    # In a real application, check against a database or authentication service
-    # valid_users = {"user1", "user2", "user3"}
-    # return user_id in valid_users
+    """
+    Placeholder for user validation logic.
+    In a real application, check against a database or authentication service.
+
+    Args:
+        user_id (str): The user ID to validate.
+
+    Returns:
+        bool: True if valid, False otherwise.
+    """
     return True  # For now, assume all users are valid
 
 
 @router.websocket("/{handler}/{user_id}/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, handler: str, user_id: str, thread_id: str):
-    print("\n\nwebsocket_endpoint >> ", handler,
-          user_id, thread_id, websocket.app)
+    """
+    WebSocket endpoint for handling chat and other handlers.
+
+    Args:
+        websocket (WebSocket): The WebSocket connection.
+        handler (str): Handler name.
+        user_id (str): User identifier.
+        thread_id (str): Thread identifier.
+    """
+    logger.info(
+        f"Websocket Connection Request, Handler: {handler}, User ID: {user_id}, Thread ID: {thread_id}")
     if not validate_user(user_id):
         await websocket.close(code=1008)
     try:
-        print("\n\nhandler >> ", handler)
         module = get_handler_module(handler)
         if not module:
             await websocket.accept()
@@ -61,14 +82,13 @@ async def websocket_endpoint(websocket: WebSocket, handler: str, user_id: str, t
         try:
             session = module.conversation_mgr.get_session(thread_id)
             previous_messages = session.get("messages", []) if session else []
-            print("previous_messages >>>> ", len(previous_messages))
             if previous_messages:
                 await ws_manager.send_message(
                     thread_id,
                     {
                         "type": "previous_messages",
                         "message_list": previous_messages,
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                     },
                 )
         except Exception as e:
@@ -80,9 +100,6 @@ async def websocket_endpoint(websocket: WebSocket, handler: str, user_id: str, t
                 logger.info(
                     f"Received message on thread {thread_id}: {data}",
                 )
-                # validate thread ID, if not valid, send error and close connection
-                # Revalidate thread ID with each message
-                # valid_thread_result = await thread_service.validate_thread_id(user_id, thread_id)
                 # Placeholder for actual validation
                 valid_thread_result = {"is_valid": True}
                 if not valid_thread_result.get("is_valid", False):
@@ -107,8 +124,7 @@ async def websocket_endpoint(websocket: WebSocket, handler: str, user_id: str, t
             # Ensure we clean up the connection
             await ws_manager.disconnect(thread_id)
     except WebSocketDisconnect:
-        print(f"WebSocket disconnected: {handler}/{user_id}/{thread_id}")
+        logger.info(f"WebSocket disconnected: {handler}/{user_id}/{thread_id}")
     except Exception as e:
-        print(f"Error in WebSocket connection: {e}")
-        print(f"Error traceback: {traceback.format_exc()}")
+        logger.exception(f"Error in WebSocket connection: {e}")
         await websocket.close(code=1011)

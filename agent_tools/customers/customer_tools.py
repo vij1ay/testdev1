@@ -1,16 +1,42 @@
 import os
 import csv
 from typing import List
+
 import pandas as pd
+
 from langchain_core.tools import tool
 from langchain_core.runnables import ensure_config
+
 from app_logger import logger
 from utils import get_cwd
 
 
 @tool
-def onboard_customer(thread_id: str, company_name: str, name: str, domain: str, email: str, phone: str, request_date: str, request_summary: str) -> List[dict]:
-    """Onboard New Customer by creating a profile and identifying issues. phone is optional."""
+def onboard_customer(
+    company_name: str,
+    name: str,
+    domain: str,
+    email: str,
+    phone: str,
+    request_date: str,
+    request_summary: str
+) -> List[dict]:
+    """
+    Onboard New Customer by creating a profile and identifying issues.
+    Phone is optional.
+
+    Args:
+        company_name (str): Name of the company.
+        name (str): Customer's name.
+        domain (str): Customer's domain.
+        email (str): Customer's email address.
+        phone (str): Customer's phone number (optional).
+        request_date (str): Date of the request.
+        request_summary (str): Summary of the request.
+
+    Returns:
+        List[dict]: Result of onboarding with success status, message, and customer_id.
+    """
     # create a csv with customer profile, match with email address. If already exists, do nothing
     config = ensure_config()
     thread_id = config.get("configurable", {}).get("thread_id", "unknown")
@@ -18,8 +44,10 @@ def onboard_customer(thread_id: str, company_name: str, name: str, domain: str, 
         f"Tool Call: onboard_customer - thread: {thread_id}, company_name: {company_name}, email: {email}")
     try:
         profiles_path = get_cwd() + os.sep + 'data' + os.sep + 'customer_profiles.csv'
-        columns = ['customer_id', 'company_name', 'name', 'domain',
-                   'email', 'phone', 'thread_id', 'request_date', 'request_summary']
+        columns = [
+            'customer_id', 'company_name', 'name', 'domain',
+            'email', 'phone', 'thread_id', 'request_date', 'request_summary'
+        ]
         logger.info(
             f"onboard_customer called with: {company_name}, {name}, {domain}, {email}, {phone}, {thread_id}, {request_date}, {request_summary}")
         create_profile = False
@@ -65,35 +93,7 @@ def onboard_customer(thread_id: str, company_name: str, name: str, domain: str, 
 
                 writer.writerow(single_row)
 
-                # profiles_df = pd.DataFrame({
-                #     'customer_id': [f"CUST-{profiles_df.shape[0] + 1:03}"],
-                #     'company_name': [company_name],
-                #     'name': [name],
-                #     'domain': [domain],
-                #     'email': [email],
-                #     'phone': [phone if phone else ''],
-                #     'thread_id': [thread_id],
-                #     'request_date': [request_date],
-                #     'request_summary': [request_summary]
-                # })
-
-                # profiles_df.to_csv(profiles_path, mode='a', index=False, header=False)
-
-                # profiles_df = pd.DataFrame(columns=['customer_id','company_name', 'name', 'domain', 'email', 'phone', 'thread_id', 'request_date', 'request_summary'])
-                # profiles_df = profiles_df.concat({
-                #     'customer_id': f"CUST-{profiles_df.shape[0] + 1:03}",
-                #     'company_name': company_name,
-                #     'name': name,
-                #     'domain': domain,
-                #     'email': email,
-                #     'phone': phone if phone else '',
-                #     'thread_id': thread_id,
-                #     'request_date': request_date,
-                #     'request_summary': request_summary
-                # }, ignore_index=True)
-                # profiles_df.to_csv(profiles_path, index=False)
-                # profiles_df.save(profiles_path, index=False)
-                print("Customer profile created for ", name)
+                logger.info("Customer profile created for %s", name)
 
                 # In the success case:
                 return {
@@ -103,9 +103,8 @@ def onboard_customer(thread_id: str, company_name: str, name: str, domain: str, 
                     "IMPORTANT_NEXT_STEP": f"MUST call store_conversation_data to save customer_id '{row_data['customer_id']}'"
                 }
         else:
-            # import pdb; pdb.set_trace()
             cdf = profiles_df[profiles_df['email'] == email]
-            print("Customer profile already exists for %s--%s--" %
+            logger.info("Customer profile already exists for %s--%s--" %
                   (cdf.name.values[0], cdf.customer_id.values[0]))
             return {
                 "success": True,
@@ -114,5 +113,9 @@ def onboard_customer(thread_id: str, company_name: str, name: str, domain: str, 
                 "IMPORTANT_NEXT_STEP": f"MUST call store_conversation_data to save customer_id '{cdf.customer_id.values[0]}'"
             }
     except Exception as e:
-        print(f"Error onboarding customer: {e}")
-        return [{"error": f"Error onboarding customer: {str(e)}"}]
+        logger.exception(f"Error onboarding customer: {e}")
+        return {
+            "success": False,
+            "message": "Error onboarding customer. Please try again later.",
+            "error": str(e)
+        }

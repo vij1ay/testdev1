@@ -17,6 +17,7 @@ import json
 import os
 import shutil
 import logging
+
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema.document import Document
 from langchain_chroma import Chroma
@@ -32,7 +33,10 @@ os.makedirs(CHROMA_DB_PATH, exist_ok=True)
 
 
 def main():
-
+    """
+    Main function to process and populate ChromaDB with documents from the testimonials folder.
+    Supports resetting the database with --reset flag.
+    """
     # Check if the database should be cleared (using the --reset flag).
     parser = argparse.ArgumentParser()
     parser.add_argument("--reset", action="store_true",
@@ -99,6 +103,9 @@ def main():
 
 
 def clear_database():
+    """
+    Clears the ChromaDB database directory.
+    """
     if os.path.exists(CHROMA_DB_PATH):
         shutil.rmtree(CHROMA_DB_PATH)
 

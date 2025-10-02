@@ -1,50 +1,56 @@
 import os
-import csv
+import ast
 import json
-import random
-from typing import List
-import pandas as pd
+
 from langchain_core.tools import tool
-from langchain.schema import HumanMessage, SystemMessage, AIMessage
+from langchain.schema import SystemMessage
+from langchain_core.runnables import ensure_config
 
-from llm_utils import get_custom_llm, get_llm
-from utils import get_cwd
+from conversations.thread_manager import ConversationManager
+from llm_utils import get_custom_llm
+from utils import get_redis_instance, get_current_datetime_str
+from app_logger import logger
 
-gllm = get_custom_llm()
+conversation_mgr = ConversationManager()
+redis_client = get_redis_instance()
+custom_llm = get_custom_llm()
 
-with open(get_cwd() + os.sep + 'data' + os.sep + 'specialists.json', 'r') as f:
-    specialists_data = json.load(f)
 
-def llm_specialist_search(search_query: str, specialists: List[dict]) -> List[dict]:
-    """Use LLM to intelligently match specialists based on search query and return 1 specialist json"""
+@tool
+def summarize_conversation() -> None:
+    """
+    Summarize the conversation in the thread and extract key details in structured json format.
+    Store summary in Redis with key as customer_company_name_with_appointment_datetime_with_specialist_name if available.
+    Return None.
+    """
+    config = ensure_config()
+    thread_id = config.get("configurable", {}).get("thread_id", "unknown")
+
     try:
-        # Prepare specialist information for LLM
-        specialist_info = []
-        for specialist in specialists:
-            specialist_str = f"ID: {specialist['specialist_id']}, Name: {specialist['name']}, Title: {specialist['title']}, Product: {specialist['products']}, Skills: {specialist['skills']}, Integrations: {specialist['integrations']}, Domain: {specialist['industries']}"
-            specialist_info.append(specialist_str)
+        print("\n\n")
+        print("In Summarize Conversation Tool -- " * 34)
+        print("\n\n")
+        messages = conversation_mgr.get_history(thread_id)
+        if not messages:
+            logger.warning(
+                f"No messages found for thread_id: {thread_id}. Cannot summarize.")
+            return None
 
-        specialist_list_text = "\n".join(specialist_info)
-        import ast  # For safely evaluating LLM output
-        # Create LLM prompt
-        system_prompt = """You are a technical specialist matching domain expert. Analyze the user query and match it with the most appropriate specialist based on their specialties, sub-specialties, and expertise. Return json dict of matched specialist with full json structure. If no match, return empty list []."""
+        # Construct a prompt for summarization
+        prompt = (
+            "Please summarize the following conversation and provide a json format of summary, "
+            "customer_info (strictly json with case sensitive keys - ['name', 'company', 'domain', 'email', 'topic']), "
+            "specialist_info (strictly json with case sensitive keys - ['name', 'designation', 'expertise']), "
+            "customer_sentiment, minutes_of_meeting (Elaborate as much as possible. Try to keep in chronological order), "
+            "customer_company_name_with_appointment_datetime_with_specialist_name "
+            "Eg {\"summary\": \"\", \"customer_info\": \"\", \"specialist_info\": \"\", \"customer_sentiment\": \"\", "
+            "\"minutes_of_meeting\": \"\", \"customer_company_name_with_appointment_datetime_with_specialist_name\": \"\"}:\nMessages:\n"
+        )
+        for message in messages:
+            prompt += f"Role: {message['role']}, Content: {message['content']}\n"
 
-        human_prompt = f"""Specialist Query: "{search_query}"
-
-Available Specialists:
-{specialist_list_text}
-
-Analyze the user query and match with the most relevant specialists based on domain and expertise. Consider:
-1. Specialty alignment with domain, expertise and skills.
-
-Filter specialists and return 1 best match"""
-
-        # Call LLM
-        response = gllm.invoke([
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=human_prompt)
-        ])
-        # print("\nSpecialist LLM response:", response)    
+        # Generate the summary using the language model
+        response = custom_llm.invoke([SystemMessage(content=prompt)])
         json_resp = response.content.strip()
         if json_resp.startswith("```") and json_resp.endswith("```"):
             json_resp = json_resp[3:-3].strip()
@@ -52,24 +58,56 @@ Filter specialists and return 1 best match"""
             json_resp = json_resp[4:].strip()
 
         # Parse LLM response
-        return ast.literal_eval(json_resp)
+        summary = ast.literal_eval(json_resp)
+
+        if not summary or "error" in summary:
+            summary = "No summary available."
+        else:
+            summary["thread_id"] = thread_id
+            summary["conversation_time"] = get_current_datetime_str()
+            redis_client.hset(
+                f"leads_generated",
+                summary.get(
+                    "customer_company_name_with_appointment_datetime_with_specialist_name",
+                    thread_id,
+                ),
+                json.dumps(summary),
+            )
 
     except Exception as e:
-        print(f"LLM search error: {e}")
-        # Fallback to simple keyword matching
-        return [specialists[0]] if specialists else []
+        logger.error(f"Error in summarize_conversation: {e}")
+    return None
 
 
-@tool
-def get_specialist_availability(thread_id: str, search_query: str) -> dict:
-    """Use LLM to intelligently match specialists based on search query and return 1 specialist based on domain and expertise"""
-    try:
-        specialist_data = llm_specialist_search(search_query, specialists_data)
-        # specialist_data = random.choice(specialists_data)
-        if "matched_specialist" in specialist_data:
-            specialist_data = specialist_data["matched_specialist"]
-        print ("\n\nSpecialist matched data >>>> ", specialist_data)
-        return {"message": f"Specialist selected: {str(specialist_data)}"}
-    except Exception as e:
-        print(f"Error fetching specialist availability: {e}")
-        return {"error": f"Error fetching specialist availability: {str(e)}"}
+# what to include in summary for future reference
+"""
+### What to Include in Summary:
+The `summarize_conversation` tool should capture:
+- **Customer profile**: Role, company, industry, team size
+- **Pain points & challenges**: What problems they're facing
+- **Goals & objectives**: What they want to achieve
+- **Requirements**: Technical needs, budget range, timeline
+- **Interest areas**: Which services they showed interest in (migration, modernization, cost optimization, etc.)
+- **Current state**: Their existing infrastructure/setup if mentioned
+- **Sentiment**: Their engagement level (highly interested, exploring, skeptical, etc.)
+- **Next steps**: What was discussed as follow-up (consultation booked, materials to review, etc.)
+- **Key quotes**: Any particularly important statements from the customer
+- **Decision factors**: Budget, timeline, stakeholders mentioned
+
+### Summary Flow:
+1. Call `summarize_conversation` with structured data
+2. Store any returned summary_id: `store_conversation_data("summary_id", summary_id)`
+3. Continue conversation naturally (don't mention summarization to customer)
+4. Update summary when new significant information appears
+
+### Example Triggers for Re-summarization:
+- Customer: "Our budget is around $50k and we need this done in Q2"
+  - You: [Call summarize_conversation to update with budget and timeline]
+  
+- Customer: "We're currently on AWS but struggling with costs"
+  - You: [Call summarize_conversation to update with current state and pain point]
+
+- Customer: "I'm the CTO and will need to involve our CFO in this decision"
+  - You: [Call summarize_conversation to update with role and stakeholders]
+
+"""
