@@ -1,8 +1,14 @@
-# MultiAgent Boilerplate
+# MultiAgent Boilerplate - Orchestrate AI workflows with ReactAgent and modular tools for scalable automation.
 
 ## Summary
 
-**MultiAgent Boilerplate** is a production-grade, extensible platform for building AI-powered customer journey agents. It orchestrates conversational flows, tool integrations, and business logic for **Customer Journey** use cases. The system leverages FastAPI, LangChain, ReactAgent, ChromaDB, and Redis for scalable, real-time, and context-aware automation.
+**MultiAgent Boilerplate is a production-ready framework** for building extensible, tool-driven AI agents. It provides a **ReactAgent Orchestrator** for managing conversational flows, tool interactions, and business logic, with **LangGraph powering the orchestration logic** as a core component. The system is built on **FastAPI for APIs and WebSocket communication, ChromaDB for semantic retrieval, and Redis for state management and checkpointing.**
+
+With the **ReactAgent Orchestrator**, the flow is fully controlled by prompts - from tool calling and validation to enforcing consent and compliance. Adding a new tool or modifying workflows is as simple as updating prompts, making it easier than ever to extend and adapt the system to new requirements.
+
+**The project** is structured so it can run standalone or be plugged into an existing **FastAPI application** with minimal changes, making it highly adaptable. With modular prompts, strict compliance flows, and scalable architecture, it accelerates the development of reliable AI assistants for enterprise use cases.
+
+This project demonstrates a **Customer Journey example**, and can be easily adapted to any organization. Simply update the prompts to reflect company offerings and values, enrich case studies and testimonials with your own data, and you’ll have a **live chatbot ready to interact with customers** and even book appointments by integrating scheduling tools with your calendar.
 
 ---
 
@@ -78,25 +84,38 @@
 ```mermaid
 flowchart TB
     U["User"] -- Interacts with --> UI["Web Chat Interface<br>assets/chat.html"]
-    UI -- HTTP Requests --> API["FastAPI Server , Websocket<br>fastapi_app.py, chat_handler.py"]
-    API -- Processes queries using --> AGENT["LangGraph React Agent<br>planner.py"]
-    AGENT -- Uses --> TOOLS["Agent Tools<br>(VectorDB, APIs, Actions)"]
-    TOOLS -- Retrieves from --> VS["Chroma Vector Store"]
-    DP["Document Processor<br>populate_casestudies/testimonials.py"] -- Populates --> VS
+    UI -- HTTP Requests/WebSocket --> API["FastAPI Server<br>fastapi_app.py,chat_handler.py"]
+    API -- Orchestration --> ORCH["ReactAgent Orchestrator<br>planner.py"]
+
+    %% Vector Store + Docs
+    T4 -- Semantic Search --> VS["Chroma Vector Store"]
+    DP["Document Processor<br>populate_casestudies.py / testimonials.py"] -- Populates --> VS
     DOCS["Case Studies, Testimonials"] -- Processed by --> DP
-    AGENT -- Generates responses with --> LLM["Language Model<br>"]
-    LLM -- Generated Result to User --> U
-    VS -- Matched Document --> LLM
-    
+
+    %% Agent Tools
+    ORCH -- Uses --> T1["Onboarding Tool"]
+    ORCH -- Uses --> T2["Specialist Finder Tool"]
+    ORCH -- Uses --> T3["Scheduler Tool"]
+    ORCH -- Uses --> T4["Retriever Tool<br>(ChromaDB)"]
+    ORCH -- Uses --> T5["Summarizer & Compliance Tool"]
+
+    %% Final LLM Output
+    ORCH -- Generates Responses with --> LLM["Language Model"]
+    LLM -- Reply to User --> U
+
     %% Styling
     U:::user
     UI:::ui
     API:::api
-    AGENT:::agent
-    TOOLS:::tools
+    ORCH:::agent
     VS:::vector
     DP:::docs
     DOCS:::docs
+    T1:::tools
+    T2:::tools
+    T3:::tools
+    T4:::tools
+    T5:::tools
     LLM:::llm
 
     %% Class Definitions
@@ -135,6 +154,7 @@ Contributions are welcome! Please open issues or submit pull requests for bug fi
 ---
 
 ## License
+
 
 
 This project is intended for production use and can be adapted for commercial deployments. Please review and comply with all third-party licenses
