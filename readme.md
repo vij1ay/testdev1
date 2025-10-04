@@ -25,83 +25,6 @@ This project demonstrates a **Customer Journey example**, and can be easily adap
 
 ---
 
-## Project Structure
-
-```
-.
-├── agent_tools/           # AI agent tools (customers, specialists, appointments, etc.)
-├── conversations/         # Conversation state and thread management
-├── websocket/             # WebSocket manager and handlers
-├── prompts/               # System and planner prompts
-├── data/                  # CSVs and persistent data (appointments, specialists, etc.)
-├── chromastore/           # ChromaDB vector stores for semantic search
-├── assets/                # Static files for chat UI
-├── fastapi_app.py         # FastAPI application entrypoint
-├── llm_utils.py           # LLM and embedding utilities
-├── utils.py               # Utility functions and environment management
-├── config.py              # Company and chatbot configuration
-├── populate_casestudies.py # Script to populate ChromaDB with case studies
-├── populate_testimonials.py # Script to populate ChromaDB with testimonials
-└── README.md              # Project documentation
-```
-
----
-
-## Setup
-
-1. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Configure environment:**
-   - Create a `.env` file with required keys (OpenAI, Google, Redis, etc.).
-   - Modify config in `config.py` for company-specific settings (CompanyName, ChatbotName, etc.).
-
-3. **Populate vector databases:**
-    - Add Case Studies and Testimonials to ChromaDB by placing JSON/txt files in the `casestudies/` and `testimonials/` directories respectively and populate by running:
-   ```bash
-   python populate_casestudies.py
-   python populate_testimonials.py
-   ```
-
----
-
-## Screenshots
-
-> Chat Interface  
-<img src="assets/screenshots/chat.png" alt="Chat Interface" width="300"/>  
-<img src="assets/screenshots/chat1.png" alt="Chat Interface" width="300"/>
-![Chat Interface](assets/screenshots/chat.png)
-![Chat Interface](assets/screenshots/chat1.png)
-
-> Sample Flow Onboarding & Appointment Booking
-![Sample Flow](assets/screenshots/onboarding.png)
-![Sample Flow](assets/screenshots/appointment.png)
-![Sample Flow](assets/screenshots/appointment_confirmation.png)
-
-> Leads Dashboard
-![Leads Dashboard](assets/screenshots/leads_generated.png)  
-
----
-
-## Running the Application
-
-1. **Start the FastAPI server:**
-   ```bash
-   python fastapi_app.py
-   ```
-
-2. **Access the chat interface:**
-   - Open your browser to `http://localhost:8000`
-   - The browser will redirect with a new chat thread like. `http://localhost:8000/?chat_threadid=5d791107-957b-46f4-adfd-b25c1d60a612`
-   - This thread ID is used to manage conversation state.
-   - Can see the full message history in the redis hash - `conversation:user` and key is the `threadID`. (In this project UserID is always "default" for simplicity.)
-   - You can open multiple browser tabs to simulate different users or sessions.
-   - The conversation will be summarized post the appointment booking and the summary will be stored in the redis hash - `leads_generated`. (access http://localhost:8000/leads_generated)
-
----
-
 ## Architecture
 
 ```mermaid
@@ -161,6 +84,80 @@ flowchart TB
 
 ---
 
+## Project Structure
+
+```
+.
+├── agent_tools/           # AI agent tools (customers, specialists, appointments, etc.)
+├── conversations/         # Conversation state and thread management
+├── websocket/             # WebSocket manager and handlers
+├── prompts/               # System and planner prompts
+├── data/                  # CSVs and persistent data (appointments, specialists, etc.)
+├── chromastore/           # ChromaDB vector stores for semantic search
+├── assets/                # Static files for chat UI
+├── fastapi_app.py         # FastAPI application entrypoint
+├── llm_utils.py           # LLM and embedding utilities
+├── utils.py               # Utility functions and environment management
+├── config.py              # Company and chatbot configuration
+├── populate_casestudies.py # Script to populate ChromaDB with case studies
+├── populate_testimonials.py # Script to populate ChromaDB with testimonials
+└── README.md              # Project documentation
+```
+
+---
+
+## Setup
+
+1. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Configure environment:**
+   - Create a `.env` file with required keys (OpenAI, Google, Redis, etc.).
+   - Modify config in `config.py` for company-specific settings (CompanyName, ChatbotName, etc.).
+
+3. **Populate vector databases:**
+    - Add Case Studies and Testimonials to ChromaDB by placing JSON/txt files in the `casestudies/` and `testimonials/` directories respectively and populate by running:
+      
+   ```bash
+   python populate_casestudies.py
+   python populate_testimonials.py
+   ```
+
+---
+
+## Running the Application
+
+1. **Start the FastAPI server:**
+   ```bash
+   python fastapi_app.py
+   ```
+
+2. **Access the chat interface:**
+   - Open your browser to `http://localhost:8000`
+   - The browser will redirect with a new chat thread like. `http://localhost:8000/?chat_threadid=5d791107-957b-46f4-adfd-b25c1d60a612`
+   - This thread ID is used to manage conversation state.
+   - Can see the full message history in the redis hash - `conversation:user` and key is the `threadID`. (In this project UserID is always "default" for simplicity.)
+   - You can open multiple browser tabs to simulate different users or sessions.
+   - The conversation will be summarized post the appointment booking and the summary will be stored in the redis hash - `leads_generated`. (access http://localhost:8000/leads_generated)
+
+---
+
+## Screenshots
+
+> Chat Interface<BR>
+<img src="assets/screenshots/chat.png" alt="Chat Interface" width="450"/>    <img src="assets/screenshots/chat1.png" alt="Chat Interface 1" width="450"/>
+
+> Sample Flow Onboarding & Appointment Booking<BR>
+<img src="assets/screenshots/onboarding.png" alt="Onboarding" width="300"/>  <img src="assets/screenshots/appointment.png" alt="Appointment" width="300"/>  <img src="assets/screenshots/appointment_confirmation.png" alt="Appointment Confirmation" width="300"/>
+
+> Leads Dashboard
+<img src="assets/screenshots/leads_generated.png" alt="Leads Generated" width="900"/>
+
+---
+
+
 ## Future Customization
 
 - **Add new tools:** Implement in `agent_tools/` and register with the planner `agent_tools/planner.py`.
@@ -181,3 +178,4 @@ Contributions are welcome! Please open issues or submit pull requests for bug fi
 
 
 This project is intended for production use and can be adapted for commercial deployments. Please review and comply with all third-party licenses
+
