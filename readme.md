@@ -69,7 +69,9 @@ This project demonstrates a **Customer Journey example**, and can be easily adap
 
 ## Screenshots
 
-> Chat Interface
+> Chat Interface  
+<img src="assets/screenshots/chat.png" alt="Chat Interface" width="300"/>  
+<img src="assets/screenshots/chat1.png" alt="Chat Interface" width="300"/>
 ![Chat Interface](assets/screenshots/chat.png)
 ![Chat Interface](assets/screenshots/chat1.png)
 
@@ -79,7 +81,7 @@ This project demonstrates a **Customer Journey example**, and can be easily adap
 ![Sample Flow](assets/screenshots/appointment_confirmation.png)
 
 > Leads Dashboard
-![Leads Dashboard](assets/screenshots/leads_dashboard.png)  
+![Leads Dashboard](assets/screenshots/leads_generated.png)  
 
 ---
 
