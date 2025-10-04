@@ -67,6 +67,22 @@ This project demonstrates a **Customer Journey example**, and can be easily adap
 
 ---
 
+## Screenshots
+
+> Chat Interface
+![Chat Interface](assets/screenshots/chat.png)
+![Chat Interface](assets/screenshots/chat1.png)
+
+> Sample Flow Onboarding & Appointment Booking
+![Sample Flow](assets/screenshots/onboarding.png)
+![Sample Flow](assets/screenshots/appointment.png)
+![Sample Flow](assets/screenshots/appointment_confirmation.png)
+
+> Leads Dashboard
+![Leads Dashboard](assets/screenshots/leads_dashboard.png)  
+
+---
+
 ## Running the Application
 
 1. **Start the FastAPI server:**
@@ -76,6 +92,11 @@ This project demonstrates a **Customer Journey example**, and can be easily adap
 
 2. **Access the chat interface:**
    - Open your browser to `http://localhost:8000`
+   - The browser will redirect with a new chat thread like. `http://localhost:8000/?chat_threadid=5d791107-957b-46f4-adfd-b25c1d60a612`
+   - This thread ID is used to manage conversation state.
+   - Can see the full message history in the redis hash - `conversation:user` and key is the `threadID`. (In this project UserID is always "default" for simplicity.)
+   - You can open multiple browser tabs to simulate different users or sessions.
+   - The conversation will be summarized post the appointment booking and the summary will be stored in the redis hash - `leads_generated`. (access http://localhost:8000/leads_generated)
 
 ---
 

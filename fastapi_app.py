@@ -118,9 +118,9 @@ def create_app() -> FastAPI:
 
     app.include_router(websocket.router)
 
-    for route in app.routes:
-        methods = getattr(route, "methods", ["WEBSOCKET"])
-        print(f"{methods} -> {route.path}")
+    # for route in app.routes:
+    #     methods = getattr(route, "methods", ["WEBSOCKET"])
+    #     print(f"{methods} -> {route.path}")
 
     return app
 
